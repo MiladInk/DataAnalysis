@@ -1,0 +1,215 @@
+---
+title: "Fifth Week: Bootstrap and Resampling Methods"
+subtitle: "Nonparametric Hypothesis tests"
+author: "Milad Aghajohari"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/NonparametricStatistics_iStock.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+لطفا با سوالات زیر پاسخ دهید.
+در همه سوالات سطح دقت را ۹۵ درصد در نظر بگیرید.
+</p>
+
+***
+```{r pandoc}
+library(dplyr)
+library(tidyr)
+library(coin)
+###########begin
+oldwarn <- getOption('warn')
+options(warn = -1)
+```
+<p dir="RTL">
+۱. شرکتی میخواهد تحقیق کند آیا درآمد نمایندگی های آن یکسان است. برای بررسی این موضوع هشت نمایندگی
+به طور تصادفی انتخاب شده اند که به ترتیب میزان فروش آنها عبارت است از 
+102, 300, 102, 100, 205, 105, 71 , 92.
+با توجه به داده آیا عملکرد نمایندگی ها یکسان است؟
+</p>
+```{r q1p1}
+chisq.test(c(102, 300, 102, 100, 205, 105, 71 , 92), p = rep(1/8,8));
+```
+We have this Null hypothesis. The probability of buying from each of the branches are equal. So there is 12.5 perecent $\frac{1}{8}$ of chance of buying from each of the branches. We will test this hypothesis with a Chi-squared goodness of fit test. As we see this Null Hypo is HIGHLY REJECTED. so the performance of this branches are not the same.
+***
+
+<p dir="RTL">
+۲. آمار فروش شرکتی در دو نوع شعبه سنتی و مدرن در زیر آمده است:
+</p>
+
+Classical stores: 50, 50, 60, 70, 75, 80, 90, 85
+
+Modern stores: 55, 75, 80, 90, 105, 65
+
+<p dir="RTL">
+آیا تفاوتی در عملکرد دو نوع شعبه وجود دارد؟
+</p>
+
+```{r q2p1}
+class<-c(50, 50, 60, 70, 75, 80, 90, 85)
+modern<-c(55, 75, 80, 90, 105, 65)
+cm<-data.frame(sell = c(class, modern), 
+           type = c(rep('claasic', length(class)),
+                    rep('modern', length(modern))))
+
+coin::oneway_test(sell~type, data = cm, distribution = "exact")
+wilcox.test(sell~type, data = cm, distribution = "exact")
+```
+
+I used Wilcoxon test and permuation test and in both of them As you can see the Null Hypothesis of no difference is NOT REJECTED. So no there is no difference between the two performances. I used Wilcoxon and permutation test because these are non-parametric tests and when the data is small they are very good. Permutaion test is for when we the Null Hypo is the same distrubution hypo for both categories.
+
+***
+
+<p dir="RTL">
+۳. اطلاعات حسابداری ۱۵ شعبه که به صورت تصادفی انتخاب شده اند به شرح زیر است:
+</p>
+
+509, 517, 502, 629, 830, 911, 847, 803, 727, 853, 757, 730, 774, 718, 904
+
+<p dir="RTL">
+شرکت مذکور برای ارتقای فروش خود یک طرح تبلیغاتی جدید را اجرا میکند. پس از طرح جدید نتایج عملکرد شعبه ها  به صورت زیر 
+اندازه گیری شده است
+</p>
+
+517, 508, 523, 730, 821, 940, 818, 821, 842, 842, 709, 688, 787, 780, 901
+
+<p dir="RTL">
+آیا تبلیغات جدید عملکرد فروش را بالا برده است؟
+</p>
+
+```{r q3p1}
+bef<-c(509, 517, 502, 629, 830, 911, 847, 803, 727, 853, 757, 730, 774, 718, 904)
+aft<-c(517, 508, 523, 730, 821, 940, 818, 821, 842, 842, 709, 688, 787, 780, 901)
+t.test(bef, aft, paired = TRUE)
+wilcox.test(bef, aft, paired = TRUE)
+```
+
+As you can see the Null Hypothesis of no diffrence between after and before is NOT REJECTED. so the programms are not improvng the performance.
+I used WilCoxon paired test becuase it is non-parametric(good for when data is small) and it is paired which is useful when data is paired too.
+
+***
+
+<p dir="RTL">
+۴. محصولی در سه رنگ سفید آبی و قرمز تولید شده است.
+پنج شعبه ار فروشگاه سازنده محصول به صورت تصادفی انتخاب شده و اطلاعات فروش آنها در زیر آمده است.
+</p>
+
+| Store | White | Blue | Red |
+| :----: | :----: | :----: | :----: |
+| 1. |	510 |	925 |	730 |
+| 2. | 720 | 735 | 745 |
+| 3. |	930 |	753 |	875 |
+| 4. |	754 |	685 |	610 |
+| 5. |	105	|  |  |
+
+<p dir="RTL">
+با توجه به داده های بالا آیا رنگی خاص در میزان فروش محصولات تاثیر دارد؟
+</p>
+```{r q4p1}
+sell.color <- data.frame(
+white=c(510, 720, 930, 754, 105),
+blue=c(925, 735, 753, 685, NA),
+red=c(730, 745, 875, 610, NA))
+sell.color %>% as.matrix() %>% friedman.test()
+```
+
+As you can see the Null Hypothesis of No difference between percentage of sale between different colors is NOT REJECTED. so No the color is not effecting the amount of sale.
+I used Friedman test because it is not effected if a store is selling 10x fold higher than the others but the rank is important for this test so we can see if these 3 colors are selling the same order in all supermarkets or any meaningful order? the answer was NO.
+
+***
+
+<p dir="RTL">
+۵. یک موسسه نظرسنجی نظرات مردم در مورد رضایت از یک محصول که در ماه های فروردین اردیبهشت خرداد و تیر که از طریق تلویزیون 
+تبلیغ شده است را مورد ارزیابی قرار می دهد.این کار بدین صورت است از افرادی در ماه اول سوال پرسیده می شود و در ماه آینده نیز از همان فرد سوال می شود که آیا از محصول مذکور راضی هستی یا خیر.
+با توجه به داده ایی که در پیوست تمرین آمده است آیا تبلیغات تاثیر مثبتی در افزایش رضایت مردم داشته است؟
+</p>
+```{r q5p1}
+tv <- read.csv("data/tv.csv")
+tv %>% as.matrix() %>% friedman.test(.)
+```
+
+As you can see Null Hypothesis of no difference after and before the AD is NOT REJECTED. So the Ads are not good.
+I used Friedman test because we asked the same person over months, which is taken into consideration by friedman test. It is non-parametric so it is good for small data.
+
+***
+
+<p dir="RTL"> 
+۶. شرکتی در حال تحقیق بر روی این موضوع است که آیا جمعیت شهر تاثیری در نوع میزان مصرف محصولات شرکت دارد.
+با توجه به داده زیر این موضوع را تحقیق کنید؟
+</p>
+
+
+| City size |	| Frequency of service usage | |
+| :---: |  :---:  | :---: | :---: | 
+| | Always	| Sometime | Never |
+| Small	| 151	| 252	| 603 |
+| Medium	| 802	| 603	| 405 |
+| Large	| 753	| 55	| 408 |
+
+```{r q6p1}
+sat<-data.frame(always = c(151, 802, 753),
+           sometime = c(252, 603, 55),
+          never = c(603, 405, 408))
+chisq.test(sat)
+```
+
+As you can see the Null Hypothesis of Independence between scale of city and type of consumption is HIGHLY REJECTED.
+I used Chi-squred test of Independence because I wanted to know if the distrubution of type of usage is the same in all cities with different population. The answer was a big NO.
+
+***
+
+<p dir="RTL"> 
+۷. شرکتی انتظار دارد با ارایه محصول الف میزان فروش محصول ب افزایش یابد.
+به همین منظور به طور تصادفی از صد مشتری خود اطلاعات مصرف جمع آوری می نماید.
+با توجه به داده های که داده شده آیا ربط معناداری بین فروش این دو محصول وجود دارد؟
+</p>
+```{r q7p1}
+sale <- read.csv("data/consumption.csv")
+library(ggplot2)
+ggplot(sale, aes(x = B, y = A))+geom_point()
+cor.test(sale$A, sale$B, method = "spearman")
+```
+
+As you can see the Spearman correlation is too low indicating no effect on each other. The plot implies the same thing too. The p-calue implies the Null hypothesis of no relation between these two is NOT REJECTED.
+I used spearman corelation beucase we wanted to see the correlation between A and B. The non-parametricness of this test will help us determin even non-linear relations. 
+
+***
+
+
+<p dir="RTL"> 
+۸. یک شرکت از ۲۰۰۰ نفر از مشتریان خود عامل خرید محصول را مورد سوال قرار میدهد 
+که خلاصه اطلاعات آن را در زیر می توانید مشاهده کنید
+</p>
+
+| Characteristics	| Male	| Female |
+| :---: |  :---:  | :---: |
+| Price	| 301	| 502 |
+| Design	| 353	| 155 |
+| Color	| 558	| 153 |
+
+<p dir="RTL"> 
+آیا جنسیت تاثیری در مشخصه کاربری کالا دارد؟
+</p>
+```{r q8p1}
+gen<-data.frame(male = c(301, 353, 558),
+                female = c(502, 155, 153))
+chisq.test(gen)
+```
+
+So it is clear that the Null hypothesis of Indepedence between gender and user criterion is HIGHLY REJECTED.
+I used Chi-squared test of Independence because we wanted to see if gender and user criterion are independent which is what this test is made for. We can see in the table plot below that this is in consistency with common sense.
+
+```{r q8p2}
+gen$type = c("price","design","color")
+gen %>% gather(male, female, key = "gender", value = "val") %>% xtabs(val~gender+type, .) -> gen.tab
+plot(gen.tab)
+```
+
+
+

@@ -1,0 +1,309 @@
+---
+title: "Tenth Week: Principal Component Analysis and Factor Analysis"
+subtitle: "PCA Stock, image, ..."
+author: "Milad Aghajohari 94105474"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/stock.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با استفاده از داده های OHLCV شرکت های تشکیل دهنده شاخص s&p500 و همچنین داده مربوط به شاخص های اقتصادی به سوالات زیر پاسخ دهید.
+</p>
+
+***
+First we are going to load the data. The $stock\_data$ is data.frame which has 6 columns $Date$, $Open$, $Close$, $Volume$, $High$, $Low$. 
+```{r}
+library(dplyr)
+library(tidyr)
+library(highcharter)
+library(readr)
+library(stringr)
+library(ggplot2)
+```
+```{r, message = F, cache = T}
+
+file_full_paths <- list.files(path="./class_data/stock_dfs", pattern="*", full.names=T, recursive=FALSE)
+file_names <- list.files(path="./class_data/stock_dfs", pattern="*", full.names=F, recursive=FALSE)
+strsplit(file_names, ".csv") %>% unlist() -> file_names
+stocks_data <- data.frame()
+for (i in 1:length(file_names)) {
+  company_data <- read_csv(file_full_paths[i]) %>%
+    select(Date, Open, Close, Volume, High, Low) %>% mutate(Symbol = file_names[i])
+  rbind(stocks_data, company_data) -> stocks_data
+}
+```
+
+<p dir="RTL">
+۱. چه شرکتی رکورددار کسب بیشترین سود در بازه یکساله، دو ساله و پنج ساله می باشد؟ این سوال را برای بخش های مختلف مورد مطالعه قرار دهید و رکورددار را معرفی کنید. (برای این کار به ستون sector داده constituents مراجعه کنید.) برای هر دو قسمت نمودار سود ده شرکت و یا بخش برتر را رسم نمایید.
+</p>
+NOTE:We get every range so the start day can be every random day.
+```{r, cahce = T}
+stocks_data -> stoc_lag
+stoc_lag$oneyear = lead(stoc_lag$Open, 365) - stoc_lag$Open
+stoc_lag$twoyear = lead(stoc_lag$Open, 365*2) - stoc_lag$Open
+stoc_lag$fiveyear = lead(stoc_lag$Open, 365*5) - stoc_lag$Open
+constitute <- read_csv("./class_data/constituents.csv")
+stoc_lag %>% .[complete.cases(.),] -> stoc_lag
+stoc_lag %>% left_join(constitute) -> stoc_lag
+stoc_lag %>% .[complete.cases(.),] -> stoc_lag
+library(knitr)
+stoc_lag %>% group_by(Sector) %>% arrange(-oneyear) %>%  select(Name, Sector, StartTime = Date, OneYearProfit = oneyear) %>% slice(1) %>% kable()
+stoc_lag %>% group_by(Sector) %>% arrange(-twoyear) %>%  select(Name, Sector, StartTime = Date, TwoYearProfit = twoyear) %>% slice(1) %>% kable()
+stoc_lag %>% group_by(Sector) %>% arrange(-fiveyear) %>% select(Name, Sector, StartTime = Date, FiveYearProfit = fiveyear) %>% slice(1) %>% kable()
+```
+
+
+
+***
+
+<p dir="RTL">
+۲. یک اعتقاد خرافی می گوید خرید سهام در روز سیزدهم ماه زیان آور است. این گزاره را مورد ارزیابی قرار دهید.
+</p>
+So We will test this againt the Null Hypothesis:No, There is no difference between the chance of Profit or Loss in 13th of the month.
+```{r}
+library(lubridate)
+stocks_data %>% filter(day(.$Date) == 13) %>% mutate(down = ifelse((Close >= Open), "UP", "DOWN")) -> stock_13
+ggplot(stock_13)+geom_bar(aes(x = down))
+binom.test(sum(stock_13$down == "UP"), length(stock_13$down), 0.5, alternative = "less")
+```
+As you see the Null Hypothesis of No Difference is NOT Rejected in favor of Proabability of Success being less than 0.5.
+We can test this with another method too. We can test the mean of profit in 13th and other days agains each other.
+```{r}
+stocks_data %>% filter(day(.$Date) == 13) %>% mutate(profit = Close - Open) %>% .$profit-> the13
+stocks_data %>% filter(day(.$Date) != 13) %>% mutate(profit = Close - Open) %>% .$profit-> not13
+t.test(the13, not13, var.equal = F)
+```
+So the the t.test DID NOT REJECT the null hypothesis of no difference between 13th and other days. SO this Khorafe is not TRUE at all.
+
+
+***
+
+<p dir="RTL">
+۳. رکورد بیشترین گردش مالی در تاریخ بورس برای چه روزی بوده است و چرا!!!
+</p>
+```{r}
+stocks_data %>% mutate(circ = abs(Close-Open)*Volume) %>% group_by(Date) %>% summarise(circ = sum(circ)) %>% arrange(-circ) %>% slice(1)
+```
+It is the 10th October of 2008 which is the Day of the Global Financial Crisis In which Most of the Stocks went down So lots of people loose huge amounts of money.
+***
+
+<p dir="RTL">
+۴. شاخص AAPL که نماد شرکت اپل است را در نظر بگیرید. با استفاده از رگرسیون خطی یک پیش کننده قیمت شروع (open price) بر اساس k روز قبل بسازید. بهترین انتخاب برای k چه مقداری است؟ دقت پیش بینی شما چقدر است؟
+</p>
+```{r,  message= F}
+stocks_data %>% filter(Symbol == "AAPL") -> applm
+applm %>% select(-Close, -Date, -Symbol, -Volume) -> applm
+library(h2o)
+h2o.init()
+for(i in 1:300){
+  varname <- paste0(as.character(i),"back") 
+  applm %>% mutate( !!varname := lag(.$Open, i)) ->applm
+}
+applm %>% colnames()
+as.h2o(applm) -> happlm
+n <- 20
+x <- c()
+for (i in 1:n){
+  h2o.glm(y = "Open", x = paste0(1:i,"back") , training_frame = happlm, family="gaussian" ,nfolds = 5) -> hglm
+  perf <- h2o.performance(hglm, happlm)
+  c(x,h2o.mse(perf))->x
+}
+```
+
+```{r}
+which(x == min(x))->inmin
+library(ggplot2)
+ggplot()+geom_line(aes(x = 1:n, y = x))
+h2o.glm(y = "Open", x = paste0(1:inmin,"back") , training_frame = happlm, family="gaussian" ,nfolds = 5) -> hglm
+summary(hglm)
+```
+So best $k$ is looking at `r inmin` days ago. the MSE of this model is $255$ and R-squared is $0.99$ So it is a very good model and explain most of the variance in the data. It is what we expected though. Guessing the tomorrow price of a share seems easy when you know the price of the share today as there are little extraditiinary changes.
+
+
+
+***
+
+<p dir="RTL">
+۵. بر روی داده های قیمت شروع شرکت ها الگوریتم pca را اعمال کنید. نمودار تجمعی درصد واریانس بیان شده در مولفه ها را رسم کنید. سه مولفه اول چند درصد از واریانس را تبیین می کند؟
+</p>
+```{r}
+stocks_data %>% select(Date, Open, Symbol) %>% spread(key = Symbol, value = Open)->stoca
+colMeans(stoca[,-1],na.rm = T)->stoca_colm
+stoca <- stoca[,colSums(is.na(stoca))<nrow(stoca)]
+for(i in 2:ncol(stoca)){
+  mean(unlist(stoca[,i]), na.rm = T) -> stoca[which(is.na(stoca[,i])),i]
+}
+prcomp(stoca[,-1], center = T)-> stopca
+cumsum(stopca$sdev^2)/sum(stopca$sdev^2)->explained_var
+ggplot()+geom_line(aes(x = 1:length(stopca$sdev), y = explained_var))
+explained_var[3]
+```
+The First plot is the aggregate sum of the explained variation in y and x is the number of principal components takens into account in each. As you can see the first 3 Principal Components Explain `r explained_var[3]` percent of the variance.
+
+***
+
+<p dir="RTL">
+۶. برای هر نماد اطلاعات بخش مربوطه را از داده constituents استخراج نمایید. برای هر بخش میانگین روزانه قیمت شروع شرکت های آن را محاسبه کنید. سپس با استفاده از میانگین به دست آمده  داده ایی با چند ستون که هر ستون یک بخش و هر سطر یک روز هست بسازید. داده مربوط را با داده شاخص های اقتصادی ادغام کنید. بر روی این داده pca بزنید و نمودار biplot آن را تفسیر کنید.
+</p>
+```{r}
+constitute <- read_csv("./class_data/constituents.csv")
+stocks_data %>% left_join(constitute) -> stoc_com
+stoc_com %>% .[complete.cases(.),]->stoc_cam
+stoc_com %>% group_by(Date, Sector) %>% summarise(Open = mean(Open, na.rm = T)) %>% ungroup()-> stoc_mean
+stoc_mean %>% spread(Sector, Open) -> stoc_mean
+indices <- read_csv("./class_data/indexes.csv")
+stoc_mean %>% left_join(indices) -> stoc
+colMeans(stoc[,-1],na.rm = T)->stoc_colm
+for(i in 2:ncol(stoc)){
+  as.numeric(stoc_colm[i-1]) -> stoc[which(is.na(stoc[,i])),i]
+}
+n <- nrow(stoc)
+#stoc[sample(1:n, 30),] -> stoc_sam
+stoc -> stoc_sam
+prcomp(stoc_sam[,-1], center = T)->stopca
+library(ggbiplot)
+stopca %>% ggbiplot(obs.scale = 0.00001, var.scale = 0.1, ellipse = TRUE, circle = TRUE)
+library(factoextra)
+fviz_pca_var(stopca, col.var = "steelblue")
+```
+As you can see Most of the Sectors vectors are in the same direction. It means that the go in the same directions most of the times. And the Real Price And Sp 500 are in the same direction which means they are correlated with each other but they are not correlated with other variables.
+***
+
+<p dir="RTL">
+۷. روی همه اطلاعات (OHLCV) سهام اپل الگوریتم PCA را اعمال کنید. سپس از مولفه اول برای پیش بینی قیمت شروع سهام در روز آینده استفاده کنید. به سوالات سوال ۴ پاسخ دهید. آیا استفاده از مولفه اول نتیجه بهتری نسبت به داده open price برای پیش بینی قیمت دارد؟
+</p>
+```{r}
+stocks_data %>% filter(Symbol == "AAPL")  -> apple_stoc 
+apple_stoc %>% select(-Date,-Symbol) %>% prcomp() -> apca 
+apple_stoc$PC1 <- apca$x[,"PC1"]
+apple_stoc$TOpen <- lead(apple_stoc$Open)
+library(h2o)
+h2o.init()
+as.h2o(apple_stoc) -> happle_stoc
+h2o.glm(y = "TOpen", x = paste0("PC1") , training_frame = happle_stoc, family="gaussian" ,nfolds = 5) -> hglm
+perf <- h2o.performance(hglm, happle_stoc)
+h2o.mse(perf)
+```
+As you can see it is much worse  than the one in question 4. It's MSE is $30130$ but in question four we had $120$.
+
+
+
+***
+
+<p dir="RTL">
+۸. نمودار سود نسبی شاخص s&p500 را رسم کنید. آیا توزیع سود نرمال است؟(از داده indexes استفاده کنید.)
+با استفاده از ده مولفه اول سوال پنج آیا می توانید سود و ضرر شاخص s&p500 را برای روز آينده پیش بینی کنید؟ از یک مدل رگرسیون لاجستیک استفاده کنید. درصد خطای پیش بینی را به دست آورید.
+</p>
+```{r}
+indices <- read_csv("class_data/indexes.csv")
+(lead(indices$SP500) - indices$SP500)/indices$SP500 -> sp_relative
+shapiro.test(sp_relative)
+qqnorm(sp_relative);qqline(sp_relative, col = 2)
+
+indices$SPR <- (sp_relative)>0
+
+stoca %>% left_join(indices %>% select(Date, SPR)) -> stoca
+data.frame(stopca$x[,1:10], SPR = stoca$SPR) -> spcasp
+spcasp %>% .[complete.cases(.),] -> spcasp
+library(h2o)
+h2o.init()
+as.h2o(spcasp) -> hspcasp
+h2o.glm(y = "SPR", x = setdiff(colnames(spcasp),"SPR"), training_frame = hspcasp, family="binomial" ,nfolds = 5) -> hglm
+summary(hglm)
+```
+As you can see Our Model is accurate $0.54$ of the times which is a bad NEWS. it is not that useful. 
+
+***
+
+<p dir="RTL"> 
+۹. عکسی که در ابتدای متن آمده را در نظر بگیرید. با استفاده از pca عکس را فشرده کنید. سپس نمودار حجم عکس فشرده بر حسب تعداد مولفه اصلی را  رسم کنید. بهترین انتخاب برای انتخاب تعداد مولفه ها در جهت فشرده سازی چه عددی است؟
+</p>
+```{r}
+library(EBImage)
+pic = flip(readImage("images/stock.jpg"))
+ red.weigth   = .2989
+  green.weigth = .587
+  blue.weigth  = 0.114
+  img = red.weigth * imageData(pic)[,,1] +
+    green.weigth * imageData(pic)[,,2] + blue.weigth  * imageData(pic)[,,3]
+  pca.img = prcomp(img, scale=TRUE)
+  
+pic_compress<-function(pic, n){
+  chosen_components <- 1:n
+  feature_vector <- pca.img$rotation[,chosen_components]
+  compact_data <- t(feature_vector) %*% t(img)
+  approx.img <- t(feature_vector %*% compact_data)
+  return(approx.img)
+}
+
+lapply(1:412, function(x){
+  pic_compress(pic, x)->pic_zip
+  writeImage(flip(pic_zip), paste0("./images/image",str_pad(as.character(x),3,"left","0"),".jpg"))
+}
+)
+image_names <- list.files(path="./images", pattern="image", full.names=T, recursive=FALSE)
+sort(image_names)->image_names
+file.info(image_names)$size->size
+file.info("./images/stock.jpg")$size->org.size
+library(ggplot2)
+ggplot()+geom_line(aes(x = 1:412, y = size))+geom_abline(slope = 0, intercept = org.size, color = "red")
+which(size < org.size)
+```
+As you can see we should use less than 11 components or we are actually just using the same space or even more.
+```{r}
+red.weigth   = .2989
+green.weigth = .587
+blue.weigth  = 0.114
+img = red.weigth * imageData(pic)[,,1] +
+  green.weigth * imageData(pic)[,,2] + blue.weigth  * imageData(pic)[,,3]
+pca.img = prcomp(img, scale=TRUE)
+cumsum(pca.img$sdev^2)/sum(pca.img$sdev^2) -> ve
+min(which(ve > 0.65))
+```
+So in Order to save $65$percent of the variance. If we use more than this we are actually occupying more space than the original photo or the space is just very near the real space but the amount of variance explained is not that much.
+
+***
+
+<p dir="RTL"> 
+۱۰. پنج ایده جالبی که روی داده های مالی بالا می توانستیم پیاده کنیم را بیان کنید. (ایده کافی است نیازی به محاسبه بر روی داده نیست.)
+</p>
+<h1>Idea 1:</h1>
+Which Sector has the most variance in relative changes in Value?Which company has the most variance in growth? Which company has the least(I suppouse it would be the thechnological companies but who knows?)
+<h1>Idea 2:</h1>
+Can you build a linear model to guess SP satistic based on the other statistics?
+<h1>Idea 3:</h1>
+Are these statistics (in indexes.csv file )correlated With Each other?
+<h1>Idea 4:</h1>
+Plot the value of mean sector shares over various sectors over years.(I have done this actually, take a look:)
+
+```{r, cache = T, eval = F}
+stocks_data %>% left_join(constitute) -> stoc_sec
+stoc_sec %>% .[complete.cases(.),]->stoc_sec
+stoc_sec %>% mutate(year = lubridate::year(Date))  -> stoc_sec 
+stoc_sec %>% group_by(Sector,year) %>% arrange(-Open) %>% slice(1:(n()/10))%>% summarise(value = mean(Open)) %>% hchart(type = "line", hcaes(group = Sector,x = year, y = value))
+```
+<h1>Idea 5:</h1>
+Which Sector obeys this rule more than the others : Richs get richer and Poor get more poor?
+(You can plot the sum of the values of the first 10 percent companies againts the whole. It is not that perfect and may be a little wrong but I think this can be a good attack to this problem)
+
+```{r, cache = T, eval = F}
+detach("package:h2o", unload= T)
+stocks_data %>% left_join(constitute) -> stoc_sec
+stoc_sec %>% .[complete.cases(.),]->stoc_sec
+stoc_sec %>% mutate(year = lubridate::year(Date))  -> stoc_sec 
+stoc_sec %>% group_by(Sector,year) %>% arrange(-Open) %>% slice(1:(n()/10))%>% summarise(top10 = sum(Open)) -> top10 
+stoc_sec %>% group_by(Sector,year) %>% summarise(all = sum(Open)) -> all
+all %>% full_join(top10) -> stoc_all
+stoc_all %>% mutate(percent_in_top_10 = top10/all) -> stoc_all
+stoc_all %>% hchart(type = "line", hcaes(group = Sector,x = year, y = percent_in_top_10))
+```
+
+
+

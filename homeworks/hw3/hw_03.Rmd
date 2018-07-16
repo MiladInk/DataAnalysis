@@ -1,0 +1,350 @@
+---
+title: "Third Week: Exploratory Data Analysis"
+subtitle: "LaLiga Analysis"
+author: "Milad Aghajohari"
+date: "`r Sys.time()`"
+output:
+prettydoc::html_pretty:
+theme: cayman
+highlight: github
+---
+
+<div align="center">
+<img  src="images/laliga-lo.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری سوم: از لالیگا تا لیگ برتر
+</h1>
+
+> <p dir="RTL"> 
+با استفاده از داده های لیگ دسته اول اسپانیا به سوالات زیر پاسخ دهید.
+از هر دو ابزار
+ggplot2
+و
+highcharter
+برای این کار تصویرسازی استفاده نمایید.
+</p>
+
+***
+We have some initial codes which will be used throughout the other codes.
+```{r }
+warning = FALSE
+library(engsoccerdata)
+library(dplyr)
+library(highcharter)
+library(ggplot2)
+find_champ <- function(games){
+  games %>%  select(Season, team = home, op = visitor, s = hgoal, r = vgoal) -> hdata
+  games %>%  select(Season, team = visitor, op = home, s = vgoal, r = hgoal) -> vdata
+  rbind(hdata, vdata) -> games
+  games %>% group_by(Season, team) %>% summarise(score = sum(s>r)*3+sum(s==r), df = sum(s)-sum(r)) %>%
+    top_n(1, score) %>% top_n(1, df) %>% slice(1) %>% select(Season, team) -> ret
+  return(ret)
+}
+get_rank_list <- function(games){
+  games %>%  select(Season, team = home, op = visitor, s = hgoal, r = vgoal) -> hdata
+  games %>%  select(Season, team = visitor, op = home, s = vgoal, r = hgoal) -> vdata
+  rbind(hdata, vdata) -> games
+  games %>% group_by(Season, team) %>% summarise(score = sum(s>r)*3+sum(s==r), df = sum(s)-sum(r)) %>%
+    group_by(Season) %>% arrange(-df) %>% arrange(-score) %>% mutate(rank = 1:n()) -> ret
+  ret %>% select(Season, team, rank) -> ret
+  return(ret)
+}
+
+find_champ_til <- function(games){
+  games$Season %>% unique() %>% as.character() -> seas
+  games %>% filter(Season == seas) -> games
+  low <- 0
+  high <- nrow(games)%/%2
+  nope <- "nope"
+  n.team <- games %>% select(team) %>% unique() %>% nrow()
+  while((high - low) > 1){
+    i<- (low+high)%/%2
+    games %>% filter(nth <= i) -> games.til
+    games.til %>% group_by(team) %>% 
+      summarise(score = sum(s>r)*3+sum(s==r), df = sum(s)-sum(r), rem = 2*(n.team-1) - n()) -> games.til
+    games.til %>% mutate(max.pos = score + 3 * rem)->games.til
+    games.til %>% arrange(-score) -> games.til
+    if(max(games.til[1,"score"])>max(games.til[seq_len(nrow(games.til)-1)+1,"max.pos"])){
+      high = i;
+    }
+    else{
+      low = i;
+    }
+  }
+  return(max(games.til[1,"rem"]))   
+}
+
+find_champ_power <- function(games){
+  games$Season %>% unique() %>% as.character() -> seas
+  games %>% filter(Season == seas) -> games
+  low <- 0
+  high <- nrow(games)/2
+  nope <- "nope"
+  n.team <- games %>% select(team) %>% unique() %>% nrow()
+  games -> games.til
+  games.til %>% group_by(team) %>% 
+    summarise(score = sum(s>r)*3+sum(s==r), df = sum(s)-sum(r), rem = 2*(n.team-1) - n()) -> games.til
+  games.til %>% mutate(max.pos = score + 3 * rem)->games.til
+  games.til %>% arrange(-score) -> games.til
+  return(max(games.til[1,"score"])-max(games.til[seq_len(nrow(games.til)-1)+1,"score"]))
+}
+win_line <- function(games){
+  games %>% arrange(Date) ->games
+  win_len <- 0
+  loss_len <- 0
+  equ_len <- 0
+  win_s <- 0
+  loss_s <- 0
+  equ_s <- 0
+  games %>% mutate(win = s>r, loss = s<r) -> games
+  for (i in seq_len(nrow(games))){
+    if(games[[i,"win"]]){
+      win_s = win_s + 1
+      win_len = max(win_len, win_s)
+      equ_s = 0
+      loss_s = 0
+    }
+    else if(games[[i,"loss"]]){
+      loss_s = loss_s + 1
+      loss_len = max(loss_len, loss_s)
+      equ_s = 0
+      win_s = 0
+    }else{
+      equ_s = equ_s + 1
+      equ_len = max(equ_len, equ_s)
+      win_s = 0
+      loss_s = 0
+    }
+  }
+  return(c(win_len, equ_len, loss_len))
+}
+
+#will be used in Q7
+find_down_til <- function(teamv , sv, rv, nthv){
+  games <- data.frame(team = teamv, s = sv, r = rv, nth = nthv)
+  low <- 0
+  high <- nrow(games)/2
+  nope <- "nope"
+  n.team <- games %>% select(team) %>% unique() %>% nrow()
+  while((high - low) > 1){
+    i<- (low+high)%/%2
+    games %>% filter(nth <= i) -> games.til
+    games.til %>% group_by(team) %>% 
+      summarise(score = sum(s>r)*3+sum(s==r), df = sum(s)-sum(r), rem = 2*(n.team-1) - n()) -> games.til
+    games.til %>% mutate(max.pos = score + 3 * rem)->games.til
+    games.til %>% arrange(-score) -> games.til
+    if(nrow(games.til)<4 | max(games.til[nrow(games.til),"max.pos"])<max(games.til[nrow(games.til)-3,"score"])){
+      high = i;
+    }
+    else{
+      low = i;
+    }
+  }
+  return(c(games.til[nrow(games.til),"rem"],games.til[nrow(games.til),"team"]))
+  #return(high)
+}
+
+find_down_til_how_soon<-function(teamv , sv, rv, nthv){
+  a<-find_down_til(teamv, sv, rv, nthv)[1]
+  return(as.integer(a))
+}
+find_down_til_name<-function(teamv , sv, rv, nthv){
+  b<-find_down_til(teamv, sv, rv, nthv)[2]
+  return(b)
+}
+
+#Global
+spain %>% arrange(Date) %>% group_by(Season) %>%  mutate(nth = 1:n()) %>% ungroup()-> spain
+spain %>%  select(Season,Date, team = home, op = visitor, s = hgoal, r = vgoal, nth) -> hdata
+spain %>%  select(Season,Date, team = visitor, op = home, s = vgoal, r = hgoal, nth) -> vdata
+rbind(hdata, vdata) -> games
+```
+<p dir="RTL">
+۱. تعداد قهرمانی های تیم ها در تاریخ لالیگا  را استخراج کرده و نمودار ستونی آنها را رسم کنید.
+</p>
+```{r }
+find_champ(spain) -> full_champs
+full_champs %>% group_by(team) %>% summarise(count = n()) %>% arrange(-count)->hchart.full.champs
+hchart.full.champs$team <- factor(hchart.full.champs$team , levels = hchart.full.champs$team )
+ggplot(hchart.full.champs, aes(x = team, y = count))+geom_col()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+hchart(hchart.full.champs, type = "column", hcaes(x = team, y = count))
+```
+***
+
+<p dir="RTL">
+۲. کسل کننده ترین لیگ و تیم را بیابید.
+نمودار ده تیم و ده فصل کسل کننده را رسم کنید.
+</p>
+For teams we have the criterion of $$\frac{s+r}{n}$$ and the lower the measure,the more boring the team.
+```{r }
+games %>%  group_by(team) %>% summarize(per = sum(s+r)/n()) %>% arrange(per)%>% slice(1:10)->ten.boring.team
+ten.boring.team$team <- factor(ten.boring.team$team, levels = ten.boring.team$team)
+ggplot(ten.boring.team)+geom_col(aes(x = team, y = per))+theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+hchart(ten.boring.team, type = "column", hcaes(x = team, y = per))
+```
+
+For teams we have the criterion of $$\frac{sum(s==r)}{n}$$ and the higher the measure,the more boring the season.
+```{r}
+games %>%  group_by(Season) %>% summarize(per = sum(s==r)/n()) %>% arrange(-per)%>% slice(1:10)->ten.boring.season
+ten.boring.season$Season <- factor(ten.boring.season$Season, levels = ten.boring.season$Season)
+ggplot(ten.boring.season)+geom_col(aes(x = Season, y = per))+theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+hchart(ten.boring.season, type = "column", hcaes(x = Season, y = per))
+```
+***
+
+<p dir="RTL">
+۳. در چند درصد موارد قهرمان نیم فصل در پایان فصل قهرمان شده است؟
+</p>
+```{r }
+full_champs %>% select(Season, full = team) -> full_champs
+spain %>%  group_by(Season) %>% slice(1:(n()%/%2)) %>% find_champ() -> half_champs
+half_champs %>% select(Season, half = team) -> half_champs
+full_join(half_champs, full_champs,"Season") -> half.vs.full
+sum(half.vs.full$full == half.vs.full$half)/nrow(half.vs.full)*100
+```
+***
+
+<p dir="RTL">
+۴. در بین سال های ۲۰۰۱ تا ۲۰۱۰ گربه سیاه تیم های بزرگ چه تیم هایی بوده است؟
+</p>
+We have  a formual for catness of team B to team A, it is:
+$$\frac{average\;rank\;B}{average\;rank\;A}\times (loss\; A+equal\;A)$$
+```{r }
+get_rank_list(spain) %>% group_by(team) %>% summarise(ave.rank = mean(rank)) %>% arrange(ave.rank) -> ave_rank
+
+spain %>%  select(Season, team = home, op = visitor, s = hgoal, r = vgoal) -> hdata
+spain %>%  select(Season, team = visitor, op = home, s = vgoal, r = hgoal) -> vdata
+rbind(hdata, vdata) -> spain.m
+spain.m %>% filter(Season >= 2001 & Season <=2009) -> spain.m
+spain.m %>% group_by(team, op) %>% summarise(win = sum(s>r), loss = sum(s<r), equ = sum(r==s), n = n())->spain.m
+left_join(spain.m, ave_rank, by = c("team" = "team")) %>% full_join(ave_rank, by = c("op" = "team"), suffix = c(".team", ".op"))  -> spain.m.cat
+spain.m.cat %>% mutate(cat.black = ave.rank.op/ave.rank.team*(loss+equ)) -> spain.m.cat
+spain.m.cat %>% group_by(team) %>% arrange(-cat.black) %>% slice(1:2) -> cat
+cat %>%  filter(ave.rank.team < 6)  -> cat
+print(cat)
+```
+***
+
+<p dir="RTL">
+۵. در تاریخ لالیگا کدام تیم رکورددار زودترین قهرمانی است؟
+همچنین کدام تیم مقتدرانه ترین قهرمانی را داشته است؟
+</p>
+```{r }
+#########Q5 
+#A
+
+games %>% group_by(Season) %>% do(data.frame(how.soon = find_champ_til(.))) %>% ungroup() -> til
+full_join(til, full_champs) -> til.full
+til.full %>% arrange(-how.soon) -> til.full
+til.full %>%  slice(1) %>% print()
+
+```
+```{r }
+#B
+games %>% group_by(Season) %>% do(data.frame(power = find_champ_power(.))) %>% ungroup -> power
+full_join(power, full_champs) -> power
+power %>% arrange(-power) %>% slice(1) %>% print()
+```
+***
+
+<p dir="RTL">
+۶. طولانی ترین نوار پیروزی مساوی و شکست مال چه تیم هایی است؟
+</p>
+```{r }
+games %>% group_by(team) %>% arrange(Date) %>% do(data.frame(win.con = win_line(.)[1])) ->games.con1
+games %>% group_by(team) %>% arrange(Date) %>% do(data.frame(equ.con = win_line(.)[2])) ->games.con2
+games %>% group_by(team) %>% arrange(Date) %>% do(data.frame(loss.con = win_line(.)[3]))->games.con3
+games.con1 %>% full_join(games.con2) %>% full_join(games.con3) -> games.con
+games.con %>% ungroup() -> games.con
+games.con %>% arrange(-win.con) %>% slice(1) %>% select(team, win.con)->E
+#print section
+paste("the team with most continious wins is", E$team, "with", E$win.con, "continious wins") %>% print()
+games.con %>% arrange(-loss.con) %>% slice(1) %>% select(team, loss.con)->E
+paste("The team with most continious losses is",E$team, "with", E$loss.con, "continious losses.")
+games.con %>% arrange(-equ.con) %>% slice(1) %>% select(team, equ.con)->E
+paste("The team with most continious equals is",  E$team, "with", E$equ.con, "continious equals.")
+```
+***
+
+<p dir="RTL">
+۷. زودترین سقوط مال کدام تیم بوده است؟
+</p>
+```{r }
+games %>% group_by(Season) %>% do(.,data.frame(how.soon =  find_down_til_how_soon(.$team, .$s, .$r, .$nth)))-> til1
+games %>% group_by(Season) %>% do(.,data.frame(soon.name =  find_down_til_name(.$team, .$s, .$r, .$nth)))-> til2
+full_join(til1, til2)->til
+til %>% arrange(-how.soon) -> til
+til %>% ungroup()%>%  slice(1) %>%print()
+```
+***
+
+<div align="center">
+<img  src="images/standings.png"  align = 'center'>
+</div>
+
+<p dir="RTL">
+مانند شکل بالا تصویری از روند تغییر رتبه تیم ها در طول فصل ۱۹۹۸ رسم نمایید.
+</p>
+```{r }
+games %>% mutate(score = (s>r)*3+(s==r)*1, df = s - r ) %>% group_by(Season, team) %>% 
+  mutate(week.num = row_number(Date)) %>% arrange(week.num) %>% mutate(score = cumsum(score), df = cumsum(df)) %>% 
+  ungroup() %>% group_by(Season, week.num) %>% mutate(rank.week = n()+1-row_number(score*10000+df)) -> games.rank
+games.rank %>% filter(Season == 1998) %>% 
+  hchart(type = "line", hcaes(x = week.num, y = rank.week, group = team)) %>% 
+  hc_yAxis(reversed = TRUE)
+games.rank %>% filter(Season == 1998) %>% 
+ ggplot(aes(x = week.num, y = rank.week, color = team))+geom_line()+scale_y_reverse()
+```
+
+***
+
+<div align="center">
+<img  src="images/bd_10.gif"  align = 'center'>
+</div>
+
+<p dir="RTL">
+۹. جدولی مشابه بالا برای فصل ۲۰۱۲ از  کل نتایج طراحی کنید.
+</p>
+```{r }
+spain %>% filter(Season == 2012)->data
+ggplot(data, aes(visitor, home)) + geom_tile(fill = "light blue", color = "blue") + 
+  geom_text(aes(label = FT), size = 2.5, angle = 0)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0))+
+  scale_x_discrete(position = "top")
+```
+***
+
+<p dir="RTL">
+۱۰. سه آماره به همراه نمودار فردوسی پسند استخراج کنید.
+</p>
+##Average goal per season
+The laliga was going down but it is going up again.
+```{r }
+spain %>% group_by(Season) %>% summarize(per = sum(hgoal+vgoal)/n()) %>% 
+  hchart(type = "line", hcaes(x = Season, y = per))
+```
+
+##Kidness of the team.
+A team is a kid if it is behaving very better in his home than other's home.
+```{r }
+spain %>% mutate(score = (hgoal>vgoal)*3+(hgoal==vgoal)) %>% group_by(home) %>%
+  summarise(score.home = mean(score))->hom
+spain %>% mutate(score = (hgoal<vgoal)*3+(hgoal==vgoal)) %>% group_by(visitor) %>%
+  summarise(score.visitor = mean(score))->vis
+full_join(hom, vis, by = c("home" = "visitor"))->kid
+kid %>% mutate(kidness = score.home/score.visitor) %>% arrange(-kidness) %>% slice(1:10) %>% 
+  hchart(type = "column", hcaes(x = home, y = kidness))
+```
+
+##The frequency of the results in LALIGA
+1-1 is more than 0-0, 3-2 is more than 3-0. It is interesting.
+```{r }
+games %>% group_by(s, r)%>% summarise(freq = n()/2) %>% filter(s>=r) %>% mutate(res = paste0(s,"-",r)) %>% arrange(-freq) %>% ungroup() %>% slice(1:20)%>%
+      hchart(type = "column", hcaes(x = res, y = freq))
+```

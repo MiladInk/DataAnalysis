@@ -1,0 +1,250 @@
+---
+title: "second week: Introduction to R and Rstudio"
+subtitle: "Mobile Data"
+author: "Milad Aghajohari"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/smartphones.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری دوم: تلفن همراه شناسی!
+</h1>
+
+> <p dir="RTL"> 
+ با استفاده از داده های گوشی های همراه به سوالات زیر پاسخ دهید. 
+برای رسم نمودار از پکیج 
+ggplot2
+استفاده کنید.
+</p>
+
+***
+```{r load_data}
+mob <- read.csv("~/university/Data_Analysis/Week2/hw_02/mobile_data.csv")
+library(dplyr)
+library(ggplot2)
+library(highcharter)
+```
+<p dir="RTL">
+۱. کدام شرکت بیشترین تعداد گوشی را تولید کرده است؟
+نمودار ستونی ۲۰ شرکت برتر بر حسب تعداد گوشی تولید کرده را رسم کنید.
+</p>
+It is so easily can be done using grouping and summarising. Here are the result:
+```{r p1}
+mob %>% group_by(company) %>% summarise(n = n()) %>% arrange(-n) %>% slice(1:20)-> top
+top$company <- factor(top$company, levels = top$company)
+ggplot(top)+geom_bar(aes(x = company, y = n), stat = "identity", fill = "green")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+***
+
+<p dir="RTL">
+۲. نمودار زمانی طول عرض  ضخامت و کیفیت دوربین گوشی ها را بکشید
+ و به نمودار هر یک مدل خطی اضافه کنید.
+</p>
+Here are the result using gruop_by, summarise. I used lm function too.
+```{r p2}
+mob %>% filter(!is.na(year)) %>% group_by(year) %>% summarise(len = mean(dim_length, na.rm =TRUE), wid = mean(dim_breadth, na.rm = TRUE),
+                                                         thickness = mean(dim_thickness, na.rm = TRUE), cam = mean(cam_px, na.rm =TRUE)) -> mob.mean
+len.lm <-lm(len~year, mob.mean)$coefficients
+p1<-ggplot(mob.mean, aes(x = year, y = len)) + geom_line()+geom_point()+geom_abline(aes(intercept = len.lm[1], slope = len.lm[2] ))
+wid.lm <-lm(wid~year, mob.mean)$coefficients
+p2<-ggplot(mob.mean, aes(x = year, y = wid)) + geom_line()+geom_point()+geom_abline(aes(intercept = wid.lm[1], slope = wid.lm[2] ))
+th.lm <-lm(thickness~year, mob.mean)$coefficients
+p3<-ggplot(mob.mean, aes(x = year, y = thickness)) + geom_line()+ geom_point()+geom_abline(aes(intercept = th.lm[1], slope = th.lm[2] ))
+cam.lm <-lm(cam~year, mob.mean)$coefficients
+p4<-ggplot(mob.mean, aes(x = year, y = cam)) + geom_line() +geom_point()+geom_abline(aes(intercept = cam.lm[1], slope = cam.lm[2] ))
+library(gridExtra)
+grid.arrange(p1,p2,p3,p4, layout_matrix = rbind(c(1,2),c(3,4)))
+
+```
+We can plot all the dots too:
+```{r p2b}
+mob %>% filter(!is.na(year)) %>% group_by(year) %>% summarise(len = mean(dim_length, na.rm =TRUE), wid = mean(dim_breadth, na.rm = TRUE),
+                                                         thickness = mean(dim_thickness, na.rm = TRUE), cam = mean(cam_px, na.rm =TRUE)) -> mob.mean
+len.lm <-lm(len~year, mob.mean)$coefficients
+p1<-ggplot(mob.mean, aes(x = year, y = len)) + geom_line()+geom_point()+geom_abline(aes(intercept = len.lm[1], slope = len.lm[2] ))+
+  geom_point(data = mob, aes(x = year, y = dim_length, alpha = 0.01), size = 0.01)
+wid.lm <-lm(wid~year, mob.mean)$coefficients
+p2<-ggplot(mob.mean, aes(x = year, y = wid)) + geom_line()+geom_point()+geom_abline(aes(intercept = wid.lm[1], slope = wid.lm[2] ))+
+  geom_point(data = mob, aes(x = year, y = dim_breadth, alpha = 0.01), size = 0.01)
+th.lm <-lm(thickness~year, mob.mean)$coefficients
+p3<-ggplot(mob.mean, aes(x = year, y = thickness)) + geom_line()+ geom_point()+geom_abline(aes(intercept = th.lm[1], slope = th.lm[2] ))+
+  geom_point(data = mob, aes(x = year, y = dim_thickness, alpha = 0.01), size = 0.01)
+cam.lm <-lm(cam~year, mob.mean)$coefficients
+p4<-ggplot(mob.mean, aes(x = year, y = cam)) + geom_line() +geom_point()+geom_abline(aes(intercept = cam.lm[1], slope = cam.lm[2] ))+
+  geom_point(data = mob, aes(x = year, y = cam_px, alpha = 0.01), size = 0.01)
+library(gridExtra)
+grid.arrange(p1,p2,p3,p4, layout_matrix = rbind(c(1,2),c(3,4)))
+
+```
+***
+
+<p dir="RTL">
+۳. نمودار ستونی متوسط قیمت گوشی بر حسب تعداد سیم کارت و دسترسی به 
+LTE
+را رسم نمایید.
+</p>
+```{r p3}
+mob %>% group_by(sim_no, LTE) %>% summarise(price = mean(price, na.rm = TRUE)) -> mob.pri
+ggplot(mob.pri)+geom_bar(aes(x = sim_no, y = price, fill = LTE), stat = "identity", position = "dodge")
+```
+***
+
+<p dir="RTL">
+۴. نمودار جعبه ایی ضحامت گوشی هایی که در سال ۲۰۱۷ معرفی شده اند را برحسب اینکه کمیت جک هدفون رسم نمایید
+</p>
+```{r p4}
+ggplot(mob %>% filter(year == "2017"))+geom_boxplot(aes(x = audio_jack, y = dim_thickness), na.rm = TRUE)
+```
+
+***
+
+<p dir="RTL">
+۵. مفهوم 
+ppi 
+را در گوشی های موبایل محاسبه و هیستوگرام آن را رسم نمایید.
+همچنین نمودار سالانه متوسط این کمیت را بکشید.
+کدام گوشی بیشترین
+ppi
+را دارد؟
+</p>
+```{r p5a}
+#histogram ppi 
+mob %>% mutate(ppi = sqrt(px_row^2+px_col^2)/display_size) %>% select(device, year,  ppi) %>% .[complete.cases(.$ppi),]-> mob.ppi
+#plot per year
+mob.ppi %>% group_by(year) %>% summarise(ppi_mean = mean(ppi)) %>% .[complete.cases(.$year),]-> mob.ppi.mean
+ggplot(mob.ppi)+geom_histogram(aes(x = ppi), bins = 100)
+```
+
+```{r p5b}
+
+ggplot(mob.ppi.mean, aes(x = year, y = ppi_mean))+geom_point()+geom_line()
+```
+
+
+```{r p5c}
+#phone with most ppi
+mob.ppi %>% arrange(-ppi)%>% slice(1)
+```
+
+***
+
+<p dir="RTL">
+۶. در گذشته به بعضی از مدل های گوشی نوکیا 
+**گوشکوب**
+گفته می شد. سعی کنید برای این مفهوم کمیتی مناسب تعریف کنید .
+ ده گوشکوب برتر را پیدا کرده و نمودار گوشکوبیت آن را رسم نمایید.
+</p>
+I think we have two good measurements for "gooshkoob", the density and the thickness of the phone. To find how absurd the thickness or density of a phone is we can just compute how many standard deviations it is away from the mean of that parameter. So
+$$\frac{thickness - mean(thickness)}{sd(thickness)}+\frac{density - mean(density)}{sd(density)}$$
+is a good criterion for being a gooshkoob.
+```{r p6}
+mob%>% filter(display_size>2 & display_size<7)%>% select(company, device, dim_length, dim_breadth, dim_thickness, weight) %>% .[complete.cases(.),] %>% 
+  mutate(dens = weight/(dim_length*dim_breadth*dim_thickness*1e-3)) -> mob.dens
+mob.dens %>% filter(dens < Inf) -> mob.dens
+dens.mu<-mean(mob.dens$dens)
+dens.sd<-sd(mob.dens$dens)
+mob.dens %>% mutate(dens.gk = (dens - dens.mu)/dens.sd) -> mob.gk
+thick.mu<-mean(mob.dens$dim_thickness)
+thick.sd<-sd(mob.dens$dim_thickness)
+mob.gk%>% mutate(thick.gk = (dim_thickness - thick.mu)/thick.sd)->mob.gk
+mob.gk %>% mutate(gk = thick.gk + dens.gk)->mob.gk
+mob.gk %>% arrange(-gk) %>% select(company, device, dens, gk)%>% slice(1:10) -> mob.gk
+mob.gk %>% mutate(name = paste(company, device)) %>% select(name, gk)-> mob.gk
+mob.gk$name <- factor(mob.gk$name, levels = mob.gk$name)
+mob.gk %>% ggplot()+geom_col(aes(x = name, y = gk, fill = gk)) + scale_fill_gradient(low="lightblue", high="darkblue")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+***
+
+<p dir="RTL">
+۷. آیا تلفن همراهی وجود دارد که در آب غرق نشود؟
+اگر جواب بله هست تمام گوشی های که این خاصیت را دارند بیابید.
+با کشیدن یک نمودار به این سوال پاسخ دهید.
+</p>
+Density is $$\frac{weight}{width\times height \times thickness}$$. If it is under 1 so the phone can stand on water. I drawn a plot of the densitues of the phones and the ones under 1 so we can have a sense of how much is the portion of this phones.
+```{r p7}
+mob %>% filter(display_size < 6 & display_size > 2) -> mobi
+mobi%>% select(device, dim_length, dim_breadth, dim_thickness, weight) %>% .[complete.cases(.),] %>% 
+  mutate(dens = weight/(dim_length*dim_breadth*dim_thickness*1e-3)) -> mob.dens
+x<-runif(nrow(mob.dens))
+ggplot(mob.dens, aes(x = x, y = dens, color = ifelse(dens < 1,3,4), label = ifelse(dens < 1,as.character(device),"")))+guides(color = FALSE)+
+  geom_point(size = 0.1)+geom_text(size = 2) + geom_abline(slope = 0, intercept =  1, color = "red")
+mob.dens %>% filter(dens < 1)
+```
+***
+
+<p dir="RTL">
+۸. نمودار پراکنش حجم ذخیره سازی باطری و وزن را رسم نمایید.
+میزان همبستگی بین این دو کمیت را محاسبه کنید.
+</p>
+```{r p8}
+ggplot(mob %>% .[complete.cases(.$battery_mah),], aes(x = battery_mah))+geom_density()
+ggplot(mob %>% .[complete.cases(.$weight),], aes(x = weight))+geom_density()
+mob %>% select(battery_mah, weight) %>% .[complete.cases(.),] -> mob.cor
+```
+the corelation is(It is so high which is logical, battery is the heaviest part in most phones):
+```{r p8cor}
+cor(mob.cor$battery_mah, mob.cor$weight)
+```
+***
+
+<p dir="RTL">
+۹. قیمت پرچمداران یک برند خاص مثلا سامسونگ را بیابید و نمودار قیمت زمان و نام مدل را رسم نمایید.
+</p>
+Being a flagship is getting recognised by the price but for the reason of not accepting luxury phones we just accept those who were under 3 times stander deviation away from mean price in that year.
+```{r p9}
+mob %>% filter(company == "Samsung", display_size<7)%>% select(price, year) %>% .[complete.cases(.),] %>% group_by(year) %>% summarise(mu = mean(price), sd = sd(price))-> sam.price
+mob %>% filter(company == "Samsung", display_size<7) -> sam
+full_join(sam, sam.price) -> mob.sam.price
+mob.sam.price %>%  filter((price > mu + sd) & (price < mu + 4*sd)) -> flag.candidates
+flag.candidates %>% group_by(year) %>% select(device, price, year) %>% arrange(-price)%>% slice(1) %>% ungroup() -> flag.price
+ggplot(flag.price, aes(x = year, y = price))+geom_line() + geom_text(aes(label = device))
+#ggplot(.) + geom_density(aes(x = price))
+```
+
+***
+
+<p dir="RTL">
+۱۰. سه نمودار جالب رسم کنید و توضیح دهید چرا از نظر شما جالب است؟
+</p>
+##Number of Phones produces per year by companies
+We can see the number of phones companies produce in each year and we can see their strategies.
+For examle Samsung was making lot's of phones but this company stopped this and decrease the diversity of their phones(So maybe they can focus on better products). It seems other companies (apple not included) make this decision to decrease number of products.
+```{r ncp}
+cnames <- c("Apple", "Samsung", "Sony", "HTC", "LG")
+mob %>%filter(company %in% cnames) -> rivals
+rivals %>%  group_by(company, year) %>% summarise(n = n()) -> comp.year
+ggplot(comp.year, aes(x = year, y = n, color = as.factor(company)))+geom_line()+theme_light()+labs(color = "company", y= "number of phones produced")
+```
+
+##Plot Average price for camera_px = 12 per year
+It is the average price for getting a phone with a high quality camera. We see the price is going up.
+```{r camera_px_with_pear}
+mob %>% .[complete.cases(.$price),] %>%filter(price < 1500)%>%.[complete.cases(.$year),] %>% .[complete.cases(.$cam_px),] %>% 
+   filter(cam_px>10 & cam_px<13)%>% group_by(year) %>% summarise(pri = mean(price))-> cam.pri
+ggplot(cam.pri, aes(x = year, y = pri))+geom_line()+geom_point()
+```
+##Average battery capacity for Android versions
+```{r base}
+mob %>% mutate(os_type = sub(" ", "", os_type))%>% filter(os_type == "Android" & display_size<5.5) %>% select(os, bat =  battery_mah)%>% mutate(os =sub("Android+[[:space:]]+", "", .$os)) %>% mutate(os = substr(.$os, 1, 1)) -> bat.os
+bat.os %>% mutate(os =sub("[A-Za-z]", "", .$os)) %>% mutate(os = as.numeric(os)) ->> bat.os
+bat.os %>% .[complete.cases(.),]->bat.os
+bat.os %>% group_by(os) %>% summarise(bat = mean(bat)) -> bat.mean
+ggplot(bat.os)+geom_point(aes(x = os, y = bat, color = bat))+scale_color_gradient(low = "lightgreen", high = "darkgreen")+
+  geom_line(data = bat.mean, aes(x = os, y = bat))+
+  labs(x = "Android Version")
+```
+
+This plot seems intersting because I wanted to know if Android Os versions are getting better at battery management. This plot shows that they are using big batteries yet and companies are setting bigger batteries on their phones, Maybe they just want to boost the hours but I think maybe we can infer that battery management is not getting that good in Android.
+
+

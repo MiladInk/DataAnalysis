@@ -1,0 +1,365 @@
+---
+title: "first week: Introduction to R and Rstudio"
+author: "Milad Aghajohari 94105474"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/Rman.jpeg"  align = 'center'>
+</div>
+
+
+<h1 dir="RTL"> 
+تمرین سری اول: چند مساله
+</h1>
+
+<p dir="RTL"> 
+به سوال های زیر را از طریق نوشتن یک کد پاسخ دهید.
+</p>
+
+***
+
+<h2 dir="RTL">
+ماتریس دوستانه
+</h2>
+
+<p dir="RTL">
+یک ماتریس
+$(n,n)$
+که شامل اعداد 
+$1,2,...,n^2$
+است. دوستانه نامیده میشود اگر مجموع سطرها با مجموع ستون های آن برابر شوند. مثال هایی از ماتریس های دوستانه از بعد ۴و۵و۶ ارایه دهید. 
+</p
+الگوریتم ساخت ماتریس دوستانه یا همان مربع جادویی برای طول اضلاع فرد و زوج های غیر بخش پذیر بر چهار و زوجهای بخشپذیر بر چهار از قبل شناخته شده است که آن را پیادهسازی کردهایم و داریم:
+</p>
+```{r p1, cache=TRUE}
+magic_square<- function(n){
+  if(n%%2 == 1){
+    Ans <-  matrix(0, nrow = n, ncol = n, byrow = TRUE)
+    cur <- c(n, n%/%2+1) 
+    Ans[cur[1], cur[2]] <- 1
+    for (i in 2:(n^2)){
+      curT <- c(cur[1]+1, cur[2]+1)
+      if(curT[1] > n && curT[2] >n){
+        curT <- c(cur[1]-1, cur[2])
+      }else if(curT[1] >n){
+        curT[1] <- 1
+      }else if(curT[2]>n){
+        curT[2] <- 1
+      }else if(Ans[curT[1], curT[2]] != 0){
+        curT <- c(cur[1]-1, cur[2])
+      }
+      cur <- curT
+      Ans[cur[1], cur[2]] <- i
+    }
+    return(Ans)
+  }
+  if(n%%4 == 2){
+    mat <- magic_square(n/2)
+    A <- mat
+    B <- mat + (n^2)/4
+    C <- mat + (n^2)/2
+    D <- mat + 3*(n^2)/4
+    temp <- A[, 1:(n%/%4)]
+    A[, 1:(n%/%4)] <- D[, 1:(n%/%4)]
+    D[, 1:(n%/%4)] <- temp
+    temp <- A[n%/%4+1, 1]
+    A[n%/%4+1, 1] <- D[n%/%4+1, 1] 
+    D[n%/%4+1, 1] <- temp
+    temp <- A[n%/%4+1, n%/%4+1]
+    A[n%/%4+1, n%/%4+1] <- D[n%/%4+1, n%/%4+1] 
+    D[n%/%4+1, n%/%4+1] <- temp
+    col_end <- n - (n%/%4-1)
+    temp <- C[,-seq(col_end)]
+    C[,-seq(col_end)] <- B[,-seq(col_end)]
+    B[,-seq(col_end)] <- temp
+    Ans <- matrix(nrow = n, ncol = n)
+    Ans[1:(n/2), 1:(n/2)] <- A
+    Ans[(n/2+1):n, 1:(n/2)] <- D
+    Ans[1:(n/2), (n/2+1):n] <- C
+    Ans[(n/2+1):n, (n/2+1):n] <- B
+    return(Ans)
+  }
+  Ans <-  matrix(1:n^2, nrow = n, ncol = n, byrow = TRUE)
+  t <- n/4
+  Ans[1:t, 3*t+1:t] <- matrix(0, nrow = t, ncol = t)
+  Ans[3*t+1:t, 3*t+1:t] <- matrix(0, nrow = t, ncol = t)
+  Ans[3*t+1:t, 1:t] <- matrix(0, nrow = t, ncol = t)
+  Ans[1:t, 1:t] <- matrix(0, nrow = t, ncol = t)
+  Ans[t+1:(2*t), t+1:(2*t)] <- matrix(0, nrow = 2*t, ncol = 2*t)
+  counter <- 1
+  nums <- 1:(n^2)
+  for(i in 1:n){
+    for(j in 1:n){
+      if(Ans[i,j] != 0){
+        nums[counter] <- NA 
+      }
+      counter <- counter + 1
+    }
+  }
+  nums <- nums[complete.cases(nums)]
+  counter <- length(nums)
+  for(i in 1:n){
+    for(j in 1:n){
+      if(Ans[i,j] == 0){
+        Ans[i,j] <- nums[counter]
+        counter <- counter - 1
+      }
+    }
+  }
+  return(Ans)
+}
+magic_square(4)
+magic_square(5)
+magic_square(6)
+```
+
+<h2 dir="RTL">
+جایشگت  عجیب
+</h2>
+
+<p dir="RTL">
+جایگشت هایی از اعداد ۱ تا ۱۳ را پیدا کنید که در شرایط زیر صدق کنند:
+</p>
+
+$$ a = (a_1, a_2,..., a_{13})$$
+$$\frac{a_1}{a_2+a_3} = \frac{a_2+a_3}{a_3+a_4+a_5}<1$$
+$$\frac{a_6}{a_6+a_7}= \frac{a_6+a_7}{a_7+a_8+a_9} = \frac{a_7+a_8+a_9}{a_5+a_9+a_{10}} <1$$
+
+$$\frac{a_{11}+a_{12}}{a_{12}+a_{13}}=\frac{a_{12}+a_{13}}{a_{13}+a_{10}}<1$$
+<p dir="RTL">
+چیزی که در این مساله جلب توجه میکند  این است که یک شرط برای پنج متغیر اول و یک شرط برای پنجتای دوم و سپس شرطی رو سه تای سوم داریم. البته  این شروط وابستگی اندکی به هم دارند. من اینگونه عمل کردم که ابتدا پنجتایی هایی را پیدا کردم که در شرط اول صدق کنند  
+و سپس به ازای این پنجتاییها پنجتاییها را پیدا کردم که در شرط دوم صدق کنند و سپس در بین ده تاییهایی ممکن  سهتاییهایی را پیدا کردم که در شرایط صدق کنند که در نهایت یک پاسخ شد.
+</p>
+```{r perm}
+library(combinat)
+combs<-combn(1:13, 5)
+tmp<-sapply(1:dim(combs)[2], function(y) lapply(permn(5), function(x) combs[x,y]))
+combs<-t(do.call(rbind, tmp))
+tol<- 1e-5
+t1<-combs[1,]/(combs[2,]+combs[3,])
+t2<-(combs[2,]+combs[3,])/(combs[4,]+combs[5,]+combs[3,])
+indices<-which(abs(t1-t2) < tol & t1 < 1)
+part1<-combs[,indices]
+
+combs<-combn(1:13, 5)
+tmp<-sapply(1:dim(combs)[2], function(y) lapply(permn(5), function(x) combs[x,y]))
+combs<-t(do.call(rbind, tmp))
+tmp<-sapply( 1:dim(part1)[2], function(x){
+  t1<-combs[1,]/(combs[1,]+combs[2,])
+  t2<-(combs[1,]+combs[2,])/(combs[2,]+combs[3,]+combs[4,])
+  t3<-(combs[2,]+combs[3,]+combs[4,])/(part1[5,x]+combs[4,]+combs[5,])
+  indices <- which(abs(t1-t2)<tol & abs(t2-t3)<tol & t1 < 1)
+  com <- combs[,indices, drop = FALSE]
+  if(length(indices) == 0){
+    return (-1)
+  }
+  e<-sapply(seq(ncol(com)), function(y) intersect(com[,y], part1[,x]))
+  indices <- which(sapply(seq_len(length(e)), function(y) length(e[[y]]))==0)
+  if(length(indices) == 0){
+    return (-1)
+  }
+  return(rbind(com[,indices, drop = FALSE], x))
+}
+)
+indices <- sapply(seq_len(length(tmp)), function(x) identical(tmp[[x]], -1))
+tmp <- tmp[!indices]
+tmp <- do.call(cbind, tmp)
+tmp <- t(tmp)
+ans<-sapply(seq_len(nrow(tmp)), function(x){
+  w <- tmp[x,]
+  c(part1[,w[length(w)], drop = FALSE],w[-length(w)])
+}
+)
+part1 <- t(ans)
+
+combs<-combn(1:13, 3) 
+tmp<-sapply(1:dim(combs)[2], function(y) lapply(permn(3), function(x) combs[x,y]))
+combs<-t(do.call(rbind, tmp))
+tmp<-sapply( 1:dim(part1)[1], function(x){
+  t1<-(combs[1,]+combs[2,])/(combs[2,]+combs[3,])
+  t2<-(combs[2,]+combs[3,])/(combs[3,]+part1[x,10])
+  indices <- which(abs(t1-t2)<tol & t1 < 1)
+  com <- combs[,indices, drop = FALSE]
+  if(length(indices) == 0){
+    return (-1)
+  }
+  e<-sapply(seq(ncol(com)), function(y) intersect(com[,y], part1[x,]))
+  indices <- which(sapply(seq_len(length(e)), function(y) length(e[[y]]))==0)
+  if(length(indices) == 0){
+    return (-1)
+  }
+  return(rbind(com[,indices, drop = FALSE], x))
+}
+)
+indices <- sapply(seq_len(length(tmp)), function(x) identical(tmp[[x]], -1))
+tmp <- tmp[!indices]
+tmp <- do.call(cbind, tmp)
+tmp <- t(tmp)
+ans<-sapply(seq_len(nrow(tmp)), function(x){
+  w<-tmp[x,]
+  c(part1[w[length(w)],, drop = FALSE],w[-length(w)])
+}
+)
+ans <- t(ans)
+print("desired permutation:")
+ans
+```
+***
+
+<h2 dir="RTL">
+مچ گیری
+</h2>
+
+<p dir="RTL">
+میزگردی شامل ۱۶ فرد دروغگو و راستگو تشکیل شده است. هر کسی ادعا میکند دو فرد کنار دستی او دروغگو هستند. چند نفر دروغگو در جمع وجود دارد؟
+</p>
+<p dir="RTL">
+تمامی دو به توان شانزده حالت را چک میکنیم.
+</p>
+```{r q3p1}
+n<-16
+who<-function(x, n){
+  if (x == 0){
+    return (n)
+  }
+  else{
+    return(x)
+  }
+}
+
+conds<-lapply(1:(2^n), function(x){
+  truth<-as.integer(intToBits(x))[1:n]
+  conds<-sapply(1:n, function(y){
+    if(truth[y]){
+      if(truth[who((y+1)%%n, n)] | truth[who((y-1)%%n, n)])
+        return(FALSE)
+    }else{
+      if(!truth[who((y+1)%%n, n)] & !truth[who((y-1)%%n, n)])
+        return(FALSE)
+    }
+    return(TRUE)
+  })
+  return(all(conds))
+}
+)
+conds <- unlist(conds)
+cands <- which(conds)
+cands<-sapply(1:length(cands), function(x){
+  as.integer(intToBits(cands[x]))[1:n]
+})
+cands <- t(cands)
+print("an example with 10 liers: 1 for honest and 0 for lier")
+cands[1,]
+n - sum(cands[1,])
+print("an example with 9 liers: 1 for honest and 0 for lier")
+cands[30,]
+n - sum(cands[30,])
+print("an example with 8 liers: 1 for honest and 0 for lier")
+cands[90,]
+n - sum(cands[90,])
+print("numebr of possible liers in all possible examples:")
+unique(n-rowSums(cands))
+```
+<p dir="RTL">
+میزگرد دیگری شامل ۱۲ نفر فرد راستگو و دروغگو تشکیل شده به طوری که هر فرد ادعا میکند از میان دو نفر کنار دستی یک نفر راستگو و یک نفر دروغگو هستند. چند نفر دروغگو در جمع وجود دارد؟
+</p>
+<p dir="RTL">
+تمامی دو به توان دوازده حالت را چک میکنیم و حالات مناسب را استخراج میکنیم.
+</p>
+```{r q3p2}
+n<-12
+conds<-lapply(1:(2^n), function(x){
+  truth<-as.integer(intToBits(x))[1:n]
+  conds<-sapply(1:n, function(y){
+    if(truth[y]){
+      if(truth[who((y+1)%%n, n)] + truth[who((y-1)%%n, n)] != 1)
+        return(FALSE)
+    }else{
+      if(truth[who((y+1)%%n, n)] + truth[who((y-1)%%n, n)] == 1)
+        return(FALSE)
+    }
+    return(TRUE)
+  })
+  return(all(conds))
+}
+)
+conds <- unlist(conds)
+cands <- which(conds)
+cands<-sapply(1:length(cands), function(x){
+  as.integer(intToBits(cands[x]))[1:n]
+})
+cands <- t(cands)
+print("an example with 4 liers: 1 for honest and 0 for lier")
+cands[1,]
+n - sum(cands[1,])
+print("an example with 12 liers: 1 for honest and 0 for lier")
+cands[4,]
+paste("number of liers:", n - sum(cands[4,]))
+print("numebr of possible liers in all possible examples:")
+unique(n - rowSums(cands))
+
+```
+<p dir="RTL">
+این دفعه میزگردی هشت نفره تشکیل شده به گونه ایی که چهار نفر ادعا میکنند از از میان دو نفر کنار دستی یکی دروغگو و دیگری راستگوست و چهار نفر دیگر اعلام میکنند که هر دو فرد کنار دستی آنها دروغگو هستند. چند نفر دروغگو در میان جمع است؟
+</p>
+<p dir="RTL">
+دو به توان هشت حالت برای راستگو یا دروغگو بودن انسانها داریم.
+چهار از هشت حالت هم برای نوع ادعای آنها
+در نهایت
+$2^{8}\times \binom{8}{4}$
+حالت داریم که تمامی آنها را چک میکنیم.
+</p>
+```{r q3p3}
+n<-8
+library(combinat)
+combs <- combn(1:8, 4)
+conds<-lapply(1:(2^n), function(x){
+  truth<-as.integer(intToBits(x))[1:n]
+  sapply(1:ncol(combs), function(z){
+    conds<-sapply(1:n, function(y){
+      if(y %in% combs[,z]){
+        if(truth[y]){
+          if(truth[who((y+1)%%n, n)] + truth[who((y-1)%%n, n)] != 1)
+            return(FALSE)
+        }else{
+          if(truth[who((y+1)%%n, n)] + truth[who((y-1)%%n, n)] == 1)
+            return(FALSE)
+        }
+        return(TRUE)
+      }else{
+        if(truth[y]){
+          if(truth[who((y+1)%%n, n)] | truth[who((y-1)%%n, n)])
+            return(FALSE)
+        }else{
+          if(!truth[who((y+1)%%n, n)] & !truth[who((y-1)%%n, n)])
+            return(FALSE)
+        }
+        return(TRUE)
+      }
+    })
+    return(all(conds))
+  })
+}
+)
+conds <- do.call(rbind, conds)
+opts<-which(conds, arr.ind = TRUE)
+cands<-sapply(1:dim(opts)[1], function(x){
+  as.integer(intToBits(opts[x,1]))[1:n]
+})
+cands <- t(cands)
+modes<-sapply(1:dim(opts)[1], function(x){
+  combs[,opts[x, 2]]
+})
+modes<- t(modes)
+print("an example: 1 for honest and 0 for lier")
+cands[1,]
+print("people who calim one of their neighbours is lier at this example:")
+modes[1,]
+print("numebr of possible liers in all possible examples:")
+unique(n - rowSums(cands))
+```

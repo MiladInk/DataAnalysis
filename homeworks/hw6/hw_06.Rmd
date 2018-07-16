@@ -1,0 +1,246 @@
+---
+title: "Sixth Week: Linear Models"
+subtitle: "House price prediction"
+author: "Milad Aghajohari 94105474"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/house.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده های قیمت منازل
+لطفا با سوالات زیر پاسخ دهید.
+</p>
+```{r}
+library(dplyr)
+library(tidyr)
+library(highcharter)
+library(psych)
+library(ggplot2)
+library(corrplot)
+```
+***
+
+<p dir="RTL">
+۱. ماتریس همبستگی متغیرهای مختلف را به دست آورده و سپس رسم نمایید.
+اعداد به دست آمده را با آزمون فرض معناداری همبستگی بسنجید و سپس ده متغیری که همبستگی بالاتری با قیمت دارند را مشخص نمایید.
+</p>
+Here we will read the data and we will compute correlation matrix between numeric variables(It is meaningless to compute correlation for variables which are not numeric). 
+```{r}
+train <- read.csv("~/university/Data_Analysis/hw_06/house/train.csv")
+train %>% select(-Id) %>% select_if(is.numeric) -> train.num
+cor(train.num, use = "pairwise.complete.obs") -> train.num.cor
+
+```
+Here we will plot the correlation matrix graphically. The colors are self explanatory.
+```{r}
+hchart(train.num.cor)
+```
+
+Here We will run a correlation test so we can see if the correlation is just meaningful. In plot below we have put an 'x' mark on the correlations which aren't below $2e^{-16}$ so just the very meaningful correlations are remained.
+
+```{r}
+cor.mtest(train.num) -> res1
+corrplot(train.num.cor, p.mat = res1$p, sig.level = 2e-16,pch.cex = 0.5, tl.cex = 0.5)
+```
+Here we will choose ten parameters with most correlation with SalePrice variable.
+```{r}
+train.num.cor %>% as.data.frame() -> train.num.cor
+train.num.cor %>% select(SalePrice) %>% mutate(param = rownames(.))%>%
+  arrange(-abs(SalePrice)) %>% slice(1:11)-> train.sale.factor
+train.sale.factor %>% slice(2:11) %>% print()
+
+```
+
+
+***
+
+<p dir="RTL">
+۲. در یک تصویر نمودار پراکنش دو به دو ده متغیر بدست آمده به همراه قیمت را رسم نمایید و هم خطی بودن متغیرها را بررسی کنید
+</p>
+Here is the plot of the pairwise variables. As we can see SalePrice and OverAllQuality has a very linear relationship. We can say there is a linear relationship between All the variables and SalePrice. It is not surprising as we chose the ten variabels with the most correlation with SalePrice. it seems between these ten variables(exclude SalePrice) we cannot see a meaningfuel collinearity except for these :(GrLivArea, TotRmsAbvGr), (GrLiveArea, X1stFlrSF).
+```{r}
+train %>% select(train.sale.factor$param) -> train.sale
+train.sale %>% plot()
+```
+
+
+***
+
+<p dir="RTL">
+۳. یک مدل خطی بر اساس ده متغیر برای پیش بینی قیمت برازش دهید. و سپس خلاصه نتایج مدل را به دست آورید.
+</p>
+Here we will fit the model and check the summary.
+```{r}
+lm(SalePrice ~ ., train.sale) -> model
+summary(model)
+```
+
+
+***
+
+<p dir="RTL">
+۴. نمودار قیمت واقعی و قیمت پیش بینی را رسم نمایید و خوب بودن مدل را ارزیابی کنید.
+</p>
+```{r}
+data.frame(predicted = model$fitted.values, real = train.sale$SalePrice, res = model$residuals)->real.est
+ggplot(real.est)+geom_point(aes(x = real, y= predicted))+coord_equal()+geom_abline(slope = 1, color = "red")
+hchart(real.est, type = "scatter", hcaes(x = real, y = res))
+```
+As we can see the model has done well. But we can see the residuals does not follow the Constant Variance rule we assumed while fitting the linear model, Residuals increase by increasing price. As we can see in the model for not very high values the real value and the fitted value are near the (x = y) line which is a good sign we have fitted well but for high values we underestimated the price.
+
+There is another parameter to see how well we fitted the data which is analysing the residuals. We can see the mean is Zero and the 1st Quantile is -19316 and the third is 290558. It seems a well-fitten model(but not a very well-fitten model).
+```{r}
+summary(model$residuals)
+```
+***
+
+<p dir="RTL">
+۵. مقدار
+R-squared
+ مدل را به دست آورید. آیا بر اساس این کمیت مدل به خوبی به داده ها برازش داده شده است؟
+ کمیت
+ F-statistic
+ را در خلاصه مدل تفسیر نمایید.
+</p>
+```{r}
+model %>% summary() %>% .$adj.r.squared
+```
+These Value is showing we have explained $77.2\%$ of the variance in the date.
+This shows that the model fitted the data well(but not very well).
+```{r}
+model %>% summary() %>% .$fstatistic
+```
+Fstatistic is 495. The p-value of these F statistic is less than $2e{-16}$ which shows that the Null Hypothesis of every coefficient being Zero is highly rejected in favor of at least one parameter having non-Zero coefficient.
+
+
+
+***
+
+<p dir="RTL">
+۶. بر اساس
+p-value
+ سطح معناداری ضرایب تصمیم بگیرید که چه متغیرهایی در مدل سازی استفاده شود.
+بر اساس متغیرهای جدید دوباره مدل سازی کنید و نتایج رو گزارش دهید.
+</p>
+As we saw in the summary of the model we can see the p-value for (GarageArea, TotRmsAbvGrd, FullBath) is not that high. So we only keep the parameters with very low p-values. We have fitted the model again and you can see the summary and a plot of(fitted vs real) values.
+```{r}
+train.sale %>% select(-GarageArea,-TotRmsAbvGrd,-FullBath, -X1stFlrSF)->train.sale
+lm(SalePrice ~ ., train.sale)->model
+summary(model)
+data.frame(predicted = model$fitted.values, real = train.sale$SalePrice, res = model$residuals)->real.est
+ggplot(real.est)+geom_point(aes(x = real, y = predicted))+geom_abline(slope = 1)
+hchart(real.est, type = "scatter", hcaes(x = real, y = res))
+```
+
+***
+
+<p dir="RTL">
+۷. مدل خود را بر اساس باقی مانده نقص یابی کنید.
+سه محک 
+normality, independance, Constant Variance
+ را در نقص یابی خود در نظر بگیرید.
+</p>
+```{r}
+#Const Var
+hchart(real.est, type = "scatter", hcaes(x = real, y = res))
+```
+As you can see in plot above the error term is not constant. To cure this we will predict $log(SalePrice)$ from now on.
+```{r}
+#so constant varicance in error term is rejected
+train.sale %>% mutate(SalePrice = log(SalePrice)) -> train.sale
+lm(SalePrice ~ ., train.sale)->model
+summary(model)
+data.frame(predicted = exp(model$fitted.values), real = exp(train.sale$SalePrice)) %>% mutate(res = predicted - real)->real.est
+hchart(real.est, type = "scatter", hcaes(x = real, y = predicted))
+hchart(real.est, type = "scatter", hcaes(x = real, y = res))
+```
+We can check if there is collinearity between the variables. A very good measure is VIF. we can see these three:(GrLivArea   GarageCars   GarageArea) are collinear between ten parameters. but in our general model as we can see the p-value for the coefficients is less than $2e^{-16}$ so collinearity did not harm our p-values. 
+```{r}
+#VIF
+train %>% select(train.sale.factor$param) -> train.sale.vif
+lm(SalePrice ~ ., train.sale.vif)->modelvif
+library(car)
+vif(modelvif)
+```
+As we can see the data is not that normal as it has some shift towards the line.
+```{r}
+#Normailty
+car::qqPlot(model, id.methode = "identify", simulate = TRUE, main = "Q-Q Plot")
+```
+
+***
+
+<p dir="RTL">
+۸. داده ها را به پنج قسمت تقسیم کنید. بر اساس چهار قسمت مدل خطی را بسازید و صحت مدل را برای یک قسمت 
+باقی مانده را تست کنید. خطای پیش بینی شما چقدر است؟
+</p>
+```{r}
+n <- nrow(train.sale)
+train.train.index <- sample(1:n,(n*0.8), replace = FALSE)
+train.valid.index <- setdiff(1:n, train.train.index)
+train.train <- train.sale[train.train.index,]
+train.valid <- train.sale[train.valid.index,]
+lm(SalePrice~., train.train)->model.lim
+predict(model.lim, train.valid) -> train.valid$fitted
+train.valid %>% mutate(fitted = exp(fitted), SalePrice = exp(SalePrice)) %>%
+  mutate(residual = fitted - SalePrice) -> train.valid
+ggplot(train.valid)+geom_point(aes(x = SalePrice, y = fitted))+geom_abline(slope = 1)
+hchart(train.valid, type = "scatter", hcaes(x = SalePrice, y = residual))
+```
+As we can see below our model is mean $-3000$ away from the real value. The First and the 3rd Quantiles are near $10k$ which is better than before.
+```{r}
+summary(train.valid$residual)
+```
+***
+
+<p dir="RTL"> 
+۹. آیا قیمت ربط غیر خطی با یکی از ده متغیر استفاده شده دارد؟
+بر اساس دستاوردهای خود مدل را بهتر نمایید.
+</p>
+```{r}
+train.sale %>% plot()
+```
+In my opinion the realtinship between the $SalePrice$ and the $TotalBsmtSf$ is better fitted by an $sqrt$ line. So I can fit these:
+```{r}
+lm(SalePrice~.+I(sqrt(TotalBsmtSF)-TotalBsmtSF), train.train)->model.end
+summary(model.end)
+```
+
+
+
+***
+
+<p dir="RTL"> 
+۱۰. بر اساس مدل نهایی به دست آمده نتایج پیش بینی خود را بر روی
+test.csv
+به دست آورید و در سایت 
+kaggle
+ در مسابقه 
+ House Prices: Advanced Regression Techniques
+بارگذاری نمایید. سپس لینک رتبه و عدد آن را ضمیمه تمرین کنید.
+</p>
+```{r}
+read.csv("~/university/Data_Analysis/hw_06/house/test.csv")->test
+for(i in 1:ncol(test)){
+  if(is.numeric(test[,i])){
+  test[is.na(test[,i]), i] <- mean(test[,i], na.rm = TRUE)
+  }
+}
+predict(model.end, test) %>% exp()->test$SalePrice
+test %>% select(Id, SalePrice) %>% write.csv("~/university/Data_Analysis/hw_06/test_pred.csv", row.names = FALSE)
+```
+Here is my result:
+<div align="center">
+<img  src="images/kaggle.png"  align = 'center'>
+</div>
+
+
+
+

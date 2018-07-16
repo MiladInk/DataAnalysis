@@ -1,0 +1,17 @@
+t(t(result)/rowSums(t(result)))->result
+result %>% as.matrix() -> result
+result[is.na(result)]<-0
+colnames(result)<-NULL
+x_index = sample(1:length(chaps), 10)
+result[,x_index]->result
+y = 1:(dim(result)[1])
+x = 1:(dim(result)[2])
+
+plot_ly(x=x/max(x),y=y/max(y),z=result, type="surface") %>%
+  layout(title = "2gram probability distrubution",
+         scene = list(
+           xaxis = list(title = "chapter"),
+           yaxis = list(title = "token"),
+           zaxis = list(title = "frequncy")
+         ))
+
